@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Meet 面談記録",
+  "version": "1.0.0",
+  "description": "Google Meet中に面談相手（予約情報）を表示し、来訪・営業結果・クローザー引き継ぎを予約管理ダッシュボードへ記録します。",
+  "permissions": ["storage"],
+  "host_permissions": ["https://yoyaku.triplek-rh.workers.dev/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
