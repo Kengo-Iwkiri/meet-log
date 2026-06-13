@@ -235,31 +235,61 @@
     }
   }
 
-  // ---- 退出検知（SPA遷移） ----
-  // Meetはページを再読み込みせずURLだけ変わることが多い。退出して会議コードが
-  // URLから消えたら、記録パネルを自動で開く（= 記載忘れ防止）。
+  // ---- 退出検知 ----
+  // MeetはSPAなので退出の仕方が一定しない（URLが変わる場合・変わらず
+  // 「通話から退出しました」画面になる場合の両方がある）。記載忘れ防止のため、
+  // 以下3つのいずれかで退出を検知したら記録パネルを自動で開く。
+  //   (1) URLから会議コードが消えた（ポーリング: contentスクリプトのworld分離に強い）
+  //   (2) 退出後画面に特有のボタン/テキスト（「再参加」等）が出た（DOM監視）
+  //   (3) 退出ボタンをクリックした（保険）
   let leftCall = false;
-  function checkLeftCall() {
+  function fireLeftCall() {
     if (leftCall) return;
-    const onMeeting = /^\/[a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3}(?:\/|$)/i.test(location.pathname);
-    if (onMeeting) return;
     leftCall = true;
-    try { sessionStorage.removeItem(SS_KEY); } catch (_) {} // 退出を検知できたので不要
+    try { sessionStorage.removeItem(SS_KEY); } catch (_) {}
     expanded = true;
     render();
     if (!lookup) init();
   }
 
-  // history APIの遷移とpopstateの両方を監視する
-  for (const fn of ['pushState', 'replaceState']) {
-    const orig = history[fn];
-    history[fn] = function () {
-      const r = orig.apply(this, arguments);
-      setTimeout(checkLeftCall, 0);
-      return r;
-    };
+  // (1) URLポーリング
+  const meetingPathRe = /^\/[a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3}(?:\/|$)/i;
+  setInterval(() => {
+    if (!leftCall && !meetingPathRe.test(location.pathname)) fireLeftCall();
+  }, 1000);
+
+  // (2)(3) 退出ボタン / 退出後画面の検知
+  // aria-labelやテキストは言語設定で変わるので日英の両方を見る。
+  const LEAVE_LABEL_RE  = /退出|leave call|通話から退出/i;
+  const RETURNED_TEXT_RE = /退出しました|再参加|もう一度参加|return to home|rejoin|you left the (?:meeting|call)/i;
+
+  // 退出後画面が出たか（再参加ボタン等のテキスト）をページ全体から探す
+  function postCallScreenShown() {
+    // パネル自身のテキストは除外したいので body のテキストのみ見る（簡易）
+    const t = document.body ? document.body.innerText : '';
+    return RETURNED_TEXT_RE.test(t);
   }
-  window.addEventListener('popstate', () => setTimeout(checkLeftCall, 0));
+
+  const mo = new MutationObserver(() => {
+    if (leftCall) { mo.disconnect(); return; }
+    if (postCallScreenShown()) fireLeftCall();
+  });
+  if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+
+  // 退出ボタンのクリックを capture フェーズで捕捉（保険）。
+  // ボタンはレンダーされ直すのでdocument委譲で拾う。
+  document.addEventListener('click', (e) => {
+    if (leftCall) return;
+    const el = e.target && e.target.closest
+      ? e.target.closest('button,[role="button"],[aria-label]')
+      : null;
+    if (!el) return;
+    const label = (el.getAttribute('aria-label') || el.textContent || '');
+    if (LEAVE_LABEL_RE.test(label)) {
+      // クリック直後はまだ通話画面。少し待って退出後画面に切り替わるのを確認してから開く
+      setTimeout(() => { if (!meetingPathRe.test(location.pathname) || postCallScreenShown()) fireLeftCall(); }, 1200);
+    }
+  }, true);
 
   render();
   init();
