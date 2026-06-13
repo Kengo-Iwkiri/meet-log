@@ -4,16 +4,35 @@
 (() => {
   'use strict';
 
-  // 会議コード（例: /abc-defg-hij）。一致しないページ（/landing等）では何もしない
+  // 退出後に記録パネルを開くため、会議コードはsessionStorageに覚えておく
+  // （退出すると /landing 等に遷移してURLから会議コードが取れなくなるため）
+  const SS_KEY = 'mlog-meet-code';
+
+  // 会議コード（例: /abc-defg-hij）を現在のURLから取得する
   const m = location.pathname.match(/^\/([a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3})(?:\/|$)/i);
-  if (!m) return;
-  const MEET_CODE = m[1].toLowerCase();
+
+  // 通話画面なら会議コードを覚えておく。
+  // 退出後の画面（会議コードがURLにない）では、覚えておいたコードを使い、
+  // 記録パネルを自動で開く（= 記載忘れ防止）。
+  let autoOpen = false;
+  let MEET_CODE;
+  if (m) {
+    MEET_CODE = m[1].toLowerCase();
+    try { sessionStorage.setItem(SS_KEY, MEET_CODE); } catch (_) {}
+  } else {
+    let saved = null;
+    try { saved = sessionStorage.getItem(SS_KEY); } catch (_) {}
+    if (!saved) return; // 通話に入っていないMeetページ（トップ等）では何もしない
+    MEET_CODE = saved;
+    autoOpen = true; // 退出直後なので記録画面をすぐ出す
+    try { sessionStorage.removeItem(SS_KEY); } catch (_) {}
+  }
 
   // ---- 状態 ----
   let lookup = null;      // { booking, candidates, owner_names }
   let booking = null;     // 表示・記録対象の予約
   let form = { attended: null, sales: null, closerName: '', closerAt: '' };
-  let expanded = false;
+  let expanded = autoOpen; // 退出直後は記録画面を開いた状態で表示する
   let saving = false;
 
   // ---- DOM ----
@@ -215,6 +234,32 @@
       }
     }
   }
+
+  // ---- 退出検知（SPA遷移） ----
+  // Meetはページを再読み込みせずURLだけ変わることが多い。退出して会議コードが
+  // URLから消えたら、記録パネルを自動で開く（= 記載忘れ防止）。
+  let leftCall = false;
+  function checkLeftCall() {
+    if (leftCall) return;
+    const onMeeting = /^\/[a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3}(?:\/|$)/i.test(location.pathname);
+    if (onMeeting) return;
+    leftCall = true;
+    try { sessionStorage.removeItem(SS_KEY); } catch (_) {} // 退出を検知できたので不要
+    expanded = true;
+    render();
+    if (!lookup) init();
+  }
+
+  // history APIの遷移とpopstateの両方を監視する
+  for (const fn of ['pushState', 'replaceState']) {
+    const orig = history[fn];
+    history[fn] = function () {
+      const r = orig.apply(this, arguments);
+      setTimeout(checkLeftCall, 0);
+      return r;
+    };
+  }
+  window.addEventListener('popstate', () => setTimeout(checkLeftCall, 0));
 
   render();
   init();
