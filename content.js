@@ -31,7 +31,13 @@
   // ---- 状態 ----
   let lookup = null;      // { booking, candidates, owner_names }
   let booking = null;     // 表示・記録対象の予約
-  let form = { attended: null, sales: null, closerName: '', closerAt: '' };
+  let form = { attended: null, sales: null, closerName: '', closerAt: '',
+    lineReason: '', closerSchedule: '', talentJob: '', lineReasonNote: '', lineMessage: '', lostReason: '', lostReasonNote: '' };
+
+  // LINE交換の理由・日程の決め方・見送り理由（予約管理 Worker の routes/admin.ts と値を合わせること）
+  const LINE_REASONS = [['closer', '今回の案件（クローザーへ繋ぐ）'], ['talent', '人材'], ['consult', '後ほど相談したい'], ['other', 'その他']];
+  const CLOSER_SCHEDULES = [['timerex', 'TimeRexを送る'], ['decided', '日程決定済み']];
+  const LOST_REASONS = [['price', '価格'], ['timing', '時期・余裕がない'], ['consider', '検討・家族相談'], ['competitor', '他社・スクール比較'], ['distrust', '不信感'], ['mismatch', 'ニーズ不一致'], ['other', 'その他']];
   let expanded = autoOpen; // 退出直後は記録画面を開いた状態で表示する
   let saving = false;
 
@@ -63,6 +69,13 @@
     form.closerAt  = b.closer_meeting_at
       ? new Date(new Date(b.closer_meeting_at).getTime() + 9 * 3600_000).toISOString().slice(0, 16)
       : '';
+    form.lineReason     = b.line_reason || '';
+    form.closerSchedule = b.closer_schedule || '';
+    form.talentJob      = b.talent_job || '';
+    form.lineReasonNote = b.line_reason_note || '';
+    form.lineMessage    = b.line_message || '';
+    form.lostReason     = b.lost_reason || '';
+    form.lostReasonNote = b.lost_reason_note || '';
   }
 
   async function init() {
@@ -124,9 +137,13 @@
           <div class="mlog-name">${esc(b.form_name || b.google_name || b.google_email)}</div>
           <div class="mlog-meta">
             ${fmtDate(b.slot_start)} ${fmtTime(b.slot_start)}〜${fmtTime(b.slot_end)} ／ 担当: ${esc(ownerName(b.owner))}
-            ${b.form_age != null ? `／ ${b.form_age}歳` : ''}${b.form_gender ? ` ${esc(b.form_gender)}` : ''}
           </div>
-          ${b.lancers_id ? `<div class="mlog-meta">ランサーズ: ${esc(b.lancers_id)}</div>` : ''}
+          ${(b.form_birthdate || b.form_age != null || b.form_gender) ? `<div class="mlog-meta">${[
+            b.form_birthdate ? esc(b.form_birthdate) : null,
+            b.form_age != null ? `${b.form_age}歳` : null,
+            b.form_gender ? esc(b.form_gender) : null,
+          ].filter(Boolean).join(' ／ ')}</div>` : ''}
+          ${b.lancers_id ? `<div class="mlog-meta"><span class="mlog-copy" data-copy="${esc(b.lancers_id)}" title="クリックでコピー">ランサーズ: ${esc(b.lancers_id)}</span></div>` : b.cw_employee_id ? `<div class="mlog-meta"><span class="mlog-copy" data-copy="${esc(b.cw_employee_id)}" title="クリックでコピー">CW: ${esc(b.cw_employee_id)}</span></div>` : ''}
           ${b.notes_doc_url ? `<div class="mlog-meta"><a href="${esc(b.notes_doc_url)}" target="_blank">📝 Gemini議事録を開く</a></div>` : ''}
           ${recorded ? `<div class="mlog-saved-tag">記録済み（変更して再保存できます）</div>` : ''}
         </div>
@@ -144,18 +161,57 @@
             <button class="mlog-opt ${form.sales === 'lost' ? 'on bad' : ''}" data-v="lost">取れなかった</button>
           </div>` : ''}
 
-        ${form.attended === 1 && form.sales === 'won' ? `
-          <label class="mlog-label">クローザーへの引き継ぎ <span class="mlog-opt-tag">任意</span></label>
-          <input type="text" id="mlog-closer" class="mlog-input" placeholder="クローザーの名前" value="${esc(form.closerName)}">
-          <label class="mlog-label" style="margin-top:6px;">クローザーと話す日時</label>
-          <input type="datetime-local" id="mlog-closer-at" class="mlog-input" value="${esc(form.closerAt)}">` : ''}
+        ${form.attended === 1 && form.sales === 'lost' ? `
+          <label class="mlog-label">見送り理由 <span class="mlog-opt-tag">任意</span></label>
+          <select id="mlog-lost" class="mlog-select">
+            <option value="">選択してください</option>
+            ${LOST_REASONS.map(([k, l]) => `<option value="${k}"${form.lostReason === k ? ' selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <input type="text" id="mlog-lost-note" class="mlog-input" style="margin-top:6px;" placeholder="補足（例: クローザーのSNSを聞かれて曖昧になった）" value="${esc(form.lostReasonNote)}">` : ''}
+
+        ${form.attended === 1 && form.sales ? `
+          <div class="mlog-sec">LINE交換・繋ぐまでの段取り</div>
+          <label class="mlog-label">LINEを交換した理由</label>
+          <div class="mlog-chips" data-group="lr">
+            <button class="mlog-opt ${!form.lineReason ? 'on sel' : ''}" data-v="">交換していない</button>
+            ${LINE_REASONS.filter(([k]) => k !== 'closer' || form.sales === 'won').map(([k, l]) =>
+              `<button class="mlog-opt ${form.lineReason === k ? 'on sel' : ''}" data-v="${k}">${l}</button>`).join('')}
+          </div>
+
+          ${form.lineReason === 'closer' ? `
+            <div class="mlog-box">
+              <label class="mlog-label">クローザー</label>
+              <input type="text" id="mlog-closer" class="mlog-input" placeholder="クローザーの名前" value="${esc(form.closerName)}">
+              <label class="mlog-label">日程の決め方</label>
+              <div class="mlog-chips" data-group="cs">
+                ${CLOSER_SCHEDULES.map(([k, l]) => `<button class="mlog-opt ${form.closerSchedule === k ? 'on sel' : ''}" data-v="${k}">${l}</button>`).join('')}
+              </div>
+              ${form.closerSchedule ? `
+                <label class="mlog-label">${form.closerSchedule === 'decided' ? '決まった日時 <span class="mlog-req">必須</span>' : '相手がTimeRexで入れた日時 <span class="mlog-opt-tag">入ったら記入</span>'}</label>
+                <input type="datetime-local" id="mlog-closer-at" class="mlog-input" value="${esc(form.closerAt)}">` : ''}
+            </div>` : ''}
+
+          ${form.lineReason === 'talent' ? `
+            <label class="mlog-label">どんな仕事を探しているか</label>
+            <textarea id="mlog-talent" class="mlog-input mlog-ta" placeholder="例: 事務の在宅ワーク。平日夜と土日で週10時間">${esc(form.talentJob)}</textarea>` : ''}
+
+          ${form.lineReason === 'other' ? `
+            <label class="mlog-label">交換した理由（その他）</label>
+            <input type="text" id="mlog-lr-note" class="mlog-input" placeholder="例: 知人を紹介してもらう" value="${esc(form.lineReasonNote)}">` : ''}
+
+          ${form.lineReason ? `
+            <label class="mlog-label">LINEで送ってほしいメッセージ <span class="mlog-opt-tag">任意</span></label>
+            <textarea id="mlog-line-msg" class="mlog-input mlog-ta" placeholder="例: テストライティングの資料と、鈴鹿さんの紹介文を送ってください">${esc(form.lineMessage)}</textarea>` : ''}
+        ` : ''}
 
         <button id="mlog-save" class="mlog-save" ${canSave() && !saving ? '' : 'disabled'}>${saving ? '保存中...' : recorded ? '更新する' : '保存する'}</button>
         <div id="mlog-msg" class="mlog-msg"></div>`;
     }
 
+    // 退出後の記録画面は大きく表示する（記載忘れ防止のため見やすく）
+    const big = autoOpen || leftCall;
     root.innerHTML = `
-      <div id="mlog-panel">
+      <div id="mlog-panel"${big ? ' class="mlog-big"' : ''}>
         <div class="mlog-head">
           <span>📋 面談記録</span>
           <button id="mlog-min" title="折りたたむ">−</button>
@@ -174,24 +230,74 @@
       if (c) { booking = c; loadForm(c); render(); }
     };
 
-    root.querySelectorAll('.mlog-btns').forEach(group => {
+    root.querySelectorAll('.mlog-btns, .mlog-chips').forEach(group => {
       group.querySelectorAll('.mlog-opt').forEach(btn => {
         btn.onclick = () => {
-          if (group.dataset.group === 'attended') {
+          const g = group.dataset.group;
+          if (g === 'attended') {
             form.attended = Number(btn.dataset.v);
             if (form.attended === 0) form.sales = null;
-          } else {
+          } else if (g === 'sales') {
             form.sales = btn.dataset.v;
+            // 取れたら「今回の案件（クローザーへ繋ぐ）」を初期選択。取れなかったらその選択は外す
+            if (form.sales === 'won' && !form.lineReason) form.lineReason = 'closer';
+            if (form.sales !== 'won' && form.lineReason === 'closer') form.lineReason = '';
+          } else if (g === 'lr') {
+            form.lineReason = btn.dataset.v;
+          } else if (g === 'cs') {
+            form.closerSchedule = btn.dataset.v;
           }
           render();
         };
       });
     });
 
+    root.querySelectorAll('.mlog-copy').forEach(el => {
+      el.onclick = () => {
+        const text = el.dataset.copy;
+        const orig = el.textContent;
+        const done = () => {
+          el.textContent = '✓ コピーしました';
+          setTimeout(() => { el.textContent = orig; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(() => {
+            // CSP等でブロックされた場合はexecCommandにフォールバック
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            done();
+          });
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          done();
+        }
+      };
+    });
+
     const closer = root.querySelector('#mlog-closer');
     if (closer) closer.oninput = () => { form.closerName = closer.value; };
     const closerAt = root.querySelector('#mlog-closer-at');
-    if (closerAt) closerAt.oninput = () => { form.closerAt = closerAt.value; };
+    if (closerAt) closerAt.oninput = () => { form.closerAt = closerAt.value; refreshSaveBtn(); };
+    const bindText = (sel, key) => { const el = root.querySelector(sel); if (el) el.oninput = () => { form[key] = el.value; }; };
+    bindText('#mlog-talent', 'talentJob');
+    bindText('#mlog-lr-note', 'lineReasonNote');
+    bindText('#mlog-line-msg', 'lineMessage');
+    bindText('#mlog-lost-note', 'lostReasonNote');
+    const lost = root.querySelector('#mlog-lost');
+    if (lost) lost.onchange = () => { form.lostReason = lost.value; };
 
     const save = root.querySelector('#mlog-save');
     if (save) save.onclick = doSave;
@@ -201,19 +307,36 @@
     if (!booking) return false;
     if (form.attended !== 0 && form.attended !== 1) return false;
     if (form.attended === 1 && form.sales !== 'won' && form.sales !== 'lost') return false;
+    // 「日程決定済み」なら決まった日時が要る
+    if (form.attended === 1 && form.lineReason === 'closer' && form.closerSchedule === 'decided' && !form.closerAt) return false;
     return true;
+  }
+  // 日時の入力だけで保存ボタンの可否が変わるので、パネルを描き直さずにボタンだけ更新する
+  function refreshSaveBtn() {
+    const b = root.querySelector('#mlog-save');
+    if (b) b.disabled = !canSave() || saving;
   }
 
   async function doSave() {
     if (!canSave() || saving) return;
     saving = true;
     render();
+    const came = form.attended === 1;
+    const lr = came ? (form.lineReason || null) : null;
+    const isCloser = lr === 'closer' && form.sales === 'won';
     const record = {
       id: booking.id,
       attended: form.attended,
-      sales_result: form.attended === 1 ? form.sales : null,
-      closer_name: form.sales === 'won' ? (form.closerName.trim() || null) : null,
-      closer_meeting_at: form.sales === 'won' && form.closerAt ? new Date(form.closerAt).toISOString() : null,
+      sales_result: came ? form.sales : null,
+      closer_name: isCloser ? (form.closerName.trim() || null) : null,
+      closer_meeting_at: isCloser && form.closerSchedule && form.closerAt ? new Date(form.closerAt).toISOString() : null,
+      line_reason: lr,
+      closer_schedule: isCloser ? (form.closerSchedule || null) : null,
+      talent_job: lr === 'talent' ? (form.talentJob.trim() || null) : null,
+      line_reason_note: lr === 'other' ? (form.lineReasonNote.trim() || null) : null,
+      line_message: lr ? (form.lineMessage.trim() || null) : null,
+      lost_reason: came && form.sales === 'lost' ? (form.lostReason || null) : null,
+      lost_reason_note: came && form.sales === 'lost' ? (form.lostReasonNote.trim() || null) : null,
     };
     const res = await send({ type: 'save', record });
     saving = false;
@@ -222,6 +345,8 @@
       booking.sales_result = record.sales_result;
       booking.closer_name = record.closer_name;
       booking.closer_meeting_at = record.closer_meeting_at;
+      ['line_reason', 'closer_schedule', 'talent_job', 'line_reason_note', 'line_message', 'lost_reason', 'lost_reason_note']
+        .forEach(k => { booking[k] = record[k]; });
       render();
       const msg = root.querySelector('#mlog-msg');
       if (msg) { msg.textContent = '✓ ダッシュボードに記録しました'; msg.className = 'mlog-msg ok'; }

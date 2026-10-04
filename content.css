@@ -41,6 +41,24 @@
   box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
   overflow: hidden;
 }
+/* 退出後の記録画面: 見逃さないよう大きく表示 */
+#mlog-panel.mlog-big {
+  width: 440px;
+  border-radius: 18px;
+}
+#mlog-panel.mlog-big .mlog-head { padding: 16px 20px; font-size: 17px; }
+#mlog-panel.mlog-big .mlog-head button { font-size: 22px; }
+#mlog-panel.mlog-big .mlog-body { padding: 18px 20px 22px; max-height: 78vh; }
+#mlog-panel.mlog-big .mlog-name { font-size: 19px; }
+#mlog-panel.mlog-big .mlog-meta { font-size: 13px; }
+#mlog-panel.mlog-big .mlog-label { font-size: 13.5px; margin: 16px 0 8px; }
+#mlog-panel.mlog-big .mlog-opt { padding: 13px 0; font-size: 14.5px; }
+#mlog-panel.mlog-big .mlog-input,
+#mlog-panel.mlog-big .mlog-select { padding: 12px 12px; font-size: 14px; }
+#mlog-panel.mlog-big .mlog-save { padding: 14px 0; font-size: 15.5px; margin-top: 18px; }
+#mlog-panel.mlog-big .mlog-msg { font-size: 13.5px; }
+#mlog-panel.mlog-big .mlog-empty { font-size: 14px; }
+
 .mlog-head {
   display: flex;
   align-items: center;
@@ -66,6 +84,8 @@
 .mlog-meta { font-size: 11.5px; color: #9aa0a6; line-height: 1.6; }
 .mlog-meta a { color: #8ab4f8; text-decoration: none; }
 .mlog-meta a:hover { text-decoration: underline; }
+.mlog-copy { cursor: pointer; border-bottom: 1px dashed #5f6368; }
+.mlog-copy:hover { color: #8ab4f8; border-bottom-color: #8ab4f8; }
 .mlog-saved-tag {
   display: inline-block;
   margin-top: 6px;
@@ -107,6 +127,22 @@
 .mlog-opt:hover { background: #3c4043; }
 .mlog-opt.on.good { background: rgba(129, 201, 149, .2); border-color: #81c995; color: #81c995; }
 .mlog-opt.on.bad { background: rgba(242, 139, 130, .18); border-color: #f28b82; color: #f28b82; }
+.mlog-opt.on.sel { background: rgba(138, 180, 248, .18); border-color: #8ab4f8; color: #8ab4f8; }
+
+/* LINE交換・繋ぐまでの段取り */
+.mlog-sec {
+  margin: 18px 0 2px;
+  padding-top: 14px;
+  border-top: 1px solid #3c4043;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8eaed;
+}
+.mlog-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mlog-chips .mlog-opt { flex: none; padding: 8px 12px; border-radius: 18px; }
+.mlog-box { margin-top: 10px; padding: 2px 12px 12px; border: 1px solid #3c4043; border-radius: 12px; background: #262729; }
+.mlog-ta { min-height: 64px; resize: vertical; font-family: inherit; line-height: 1.5; }
+#mlog-panel.mlog-big .mlog-chips .mlog-opt { padding: 10px 14px; font-size: 13.5px; }
 
 .mlog-input, .mlog-select {
   width: 100%;
