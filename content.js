@@ -9,7 +9,10 @@
   const SS_KEY = 'mlog-meet-code';
 
   // 会議コード（例: /abc-defg-hij）を現在のURLから取得する
-  const m = location.pathname.match(/^\/([a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3})(?:\/|$)/i);
+  // 通常の /会議コード と /meet/会議コード の両方に対応する。
+  // 初期表示と退出判定で同じ式を使い、通話中の誤判定を防ぐ。
+  const meetingPathRe = /^\/(?:meet\/)?([a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3})(?:\/|$)/i;
+  const m = location.pathname.match(meetingPathRe);
 
   // 通話画面なら会議コードを覚えておく。
   // 退出後の画面（会議コードがURLにない）では、覚えておいたコードを使い、
@@ -378,7 +381,6 @@
   }
 
   // (1) URLポーリング
-  const meetingPathRe = /^\/[a-z0-9]{2,}(?:-[a-z0-9]{2,}){1,3}(?:\/|$)/i;
   setInterval(() => {
     if (!leftCall && !meetingPathRe.test(location.pathname)) fireLeftCall();
   }, 1000);
