@@ -1,6 +1,8 @@
 // Meet 面談記録: 予約管理Worker（yoyaku）との通信を担当
 // 管理者として https://yoyaku.triplek-rh.workers.dev にログイン済みのセッションCookieを使う
 const BASE_URL = 'https://yoyaku.triplek-rh.workers.dev';
+// /admin はUnity画面への転送のみ。拡張用の予約セッションを共通認証から発行する。
+const LOGIN_URL = `${BASE_URL}/auth/unispect/start`;
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
@@ -23,7 +25,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
 
       if (res.status === 401 || res.status === 403) {
-        sendResponse({ ok: false, needLogin: true, loginUrl: `${BASE_URL}/admin` });
+        sendResponse({ ok: false, needLogin: true, loginUrl: LOGIN_URL });
         return;
       }
       const data = await res.json().catch(() => ({}));

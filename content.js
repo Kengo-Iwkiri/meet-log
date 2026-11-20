@@ -118,7 +118,7 @@
       body = `
         <div class="mlog-empty">
           予約管理にログインが必要です。<br>
-          <a href="${esc(lookup.loginUrl || 'https://yoyaku.triplek-rh.workers.dev/admin')}" target="_blank">管理画面を開いてログイン</a>した後、
+          <a href="${esc(lookup.loginUrl || 'https://yoyaku.triplek-rh.workers.dev/auth/unispect/start')}" target="_blank">共通ログインを開く</a>した後、
           <button class="mlog-link" id="mlog-reload">再読み込み</button>してください。
         </div>`;
     } else if (lookup.error) {
